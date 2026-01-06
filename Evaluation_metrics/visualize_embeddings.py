@@ -44,3 +44,6 @@ def visualize_embeddings(
     plt.legend()
     plt.grid()
     plt.show()
+
+# Example usage:
+# visualize_embeddings(embs, labels, class_centers)  # Provide actual data here

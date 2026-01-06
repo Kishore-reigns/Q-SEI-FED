@@ -19,3 +19,5 @@ def pairwise_confusion(embeddings, labels, threshold):
     cm = confusion_matrix(y_true, y_pred)
     return cm
 
+# Example usage:
+# cm = pairwise_confusion(embs, labels, threshold=0.5)  # Adjust threshold as needed   
