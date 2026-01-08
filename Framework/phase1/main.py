@@ -7,7 +7,7 @@ import STFT
 import visualize_spec
 import embedding
 import gate
-import model
+from model import LSNet
 
 
 def main():
@@ -49,8 +49,8 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("[INFO] Device:", device)
 
-    model = model.LSNet(embedding_dim=128)
-    model.load_state_dict(torch.load("models/lsnet_triplet.pth", map_location=device))
+    model = LSNet(embedding_dim=128)
+    model.load_state_dict(torch.load("../../PTH/lsnet_epoch_20_final.pth", map_location=device))
     model.to(device)
     model.eval()
 
