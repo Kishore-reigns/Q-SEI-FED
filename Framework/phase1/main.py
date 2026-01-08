@@ -1,13 +1,13 @@
 import torch
 
+import data_loader
 from file_picker import pick_npz_file
-from data_loader import load_iq_npz
-from visualize_iq import plot_iq, plot_constellation
-from STFT import iq_to_spectrogram
-from visualize_spec import plot_spectrogram
-from embedding import get_embedding
-from gate import hardware_identity_check
-from model import LSNet
+import visualize_iq 
+import STFT
+import visualize_spec
+import embedding
+import gate
+import model
 
 
 def main():
@@ -22,22 +22,26 @@ def main():
     # -------------------------
     # 2. Load data
     # -------------------------
-    X, y = load_iq_npz(npz_path)
+    iq, meta = data_loader.load_iq_npz(npz_path)
 
-    ref_iq  = X[0]
-    test_iq = X[10]
-
+    ref_iq  = iq
+    test_iq = iq
     # -------------------------
     # 3. Visualize IQ
     # -------------------------
-    plot_iq(ref_iq, "Reference UAV IQ")
-    plot_constellation(ref_iq)
+    visualize_iq.plot_iq(ref_iq, "Reference UAV IQ")
+    visualize_iq.plot_constellation(ref_iq)
 
     # -------------------------
     # 4. Spectrogram
     # -------------------------
-    spec = iq_to_spectrogram(ref_iq)
-    plot_spectrogram(spec)
+    spec = STFT.iq_to_spectrogram(ref_iq)
+    visualize_spec.plot_spectrogram(spec)
+
+
+    spec_combined = STFT.iq_to_combined_spectrogram(ref_iq)
+
+    visualize_spec.plot_combined_spectrogram(spec_combined)
 
     # -------------------------
     # 5. Load LSNet
@@ -45,7 +49,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("[INFO] Device:", device)
 
-    model = LSNet(embedding_dim=128)
+    model = model.LSNet(embedding_dim=128)
     model.load_state_dict(torch.load("models/lsnet_triplet.pth", map_location=device))
     model.to(device)
     model.eval()
@@ -53,13 +57,13 @@ def main():
     # -------------------------
     # 6. Embeddings
     # -------------------------
-    z_ref  = get_embedding(ref_iq, model, device)
-    z_test = get_embedding(test_iq, model, device)
+    z_ref  = embedding.get_embedding(ref_iq, model, device)
+    z_test = embedding.get_embedding(test_iq, model, device)
 
     # -------------------------
     # 7. Hardware Identity Gate
     # -------------------------
-    decision, dist = hardware_identity_check(z_ref, z_test)
+    decision, dist = gate.hardware_identity_check(z_ref, z_test)
 
     print("\n========== RESULT ==========")
     print("Decision :", decision)
