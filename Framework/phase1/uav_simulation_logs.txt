@@ -12342,3 +12342,49 @@
 [20:43:23.072] ℹ️ PQC SECURED: Sybil_DJI_001_S11 | L=49.09ms | L_crypto=15.81ms | B_total=68.10KB | O_bw=9.0%
 [20:43:23.073] 🔄 UPDATE: Sybil_DJI_001_S11 → GBS | Trust: 0.63
 [20:43:23.075] 🔄 UPDATE: UNKNOWN_NOISE_U12 → GBS | Trust: 0.54
+[20:43:47.006] ℹ️ PQC HANDSHAKE START: DJI_001_D1
+[20:43:47.007] ℹ️ PQC SECURED: DJI_001_D1 | L=16.88ms | L_crypto=0.00ms | B_total=15.62KB | O_bw=0.0%
+[20:43:47.018] ℹ️ PQC SECURED: DJI_001_D1 | L=26.24ms | L_crypto=9.30ms | B_total=15.81KB | O_bw=1.2%
+[20:43:47.037] ℹ️ PQC SECURED: DJI_001_D1 | L=36.20ms | L_crypto=17.57ms | B_total=21.23KB | O_bw=35.8%
+[20:43:47.040] 🔄 UPDATE: DJI_001_D1 → GBS | Trust: 0.63
+[20:43:47.042] ℹ️ PQC HANDSHAKE START: DJI_002_D2
+[20:43:47.043] ℹ️ PQC SECURED: DJI_002_D2 | L=16.88ms | L_crypto=0.00ms | B_total=15.62KB | O_bw=0.0%
+[20:43:47.055] ℹ️ PQC SECURED: DJI_002_D2 | L=27.35ms | L_crypto=10.41ms | B_total=15.81KB | O_bw=1.2%
+[20:43:47.071] ℹ️ PQC SECURED: DJI_002_D2 | L=32.95ms | L_crypto=14.32ms | B_total=21.23KB | O_bw=35.8%
+[20:43:47.072] 🔄 UPDATE: DJI_002_D2 → GBS | Trust: 0.63
+[20:43:47.073] ℹ️ PQC HANDSHAKE START: DJI_003_D3
+[20:43:47.073] ℹ️ PQC SECURED: DJI_003_D3 | L=16.88ms | L_crypto=0.00ms | B_total=15.62KB | O_bw=0.0%
+[20:43:47.085] ℹ️ PQC SECURED: DJI_003_D3 | L=26.64ms | L_crypto=9.70ms | B_total=15.81KB | O_bw=1.2%
+[20:43:47.102] ℹ️ PQC SECURED: DJI_003_D3 | L=34.05ms | L_crypto=15.42ms | B_total=21.23KB | O_bw=35.8%
+[20:43:47.102] 🔄 UPDATE: DJI_003_D3 → GBS | Trust: 0.63
+[20:43:47.104] ℹ️ PQC HANDSHAKE START: ENEMY_DJI_D4
+[20:43:47.105] ℹ️ PQC SECURED: ENEMY_DJI_D4 | L=31.53ms | L_crypto=0.00ms | B_total=62.50KB | O_bw=0.0%
+[20:43:47.118] ℹ️ PQC SECURED: ENEMY_DJI_D4 | L=42.48ms | L_crypto=10.89ms | B_total=62.68KB | O_bw=0.3%
+[20:43:47.132] ℹ️ PQC SECURED: ENEMY_DJI_D4 | L=46.23ms | L_crypto=12.95ms | B_total=68.10KB | O_bw=9.0%
+[20:43:47.133] 🔄 UPDATE: ENEMY_DJI_D4 → GBS | Trust: 0.63
+[20:43:47.136] ℹ️ PQC HANDSHAKE START: FUTABA_T14_001_D6
+[20:43:47.137] ℹ️ PQC SECURED: FUTABA_T14_001_D6 | L=16.88ms | L_crypto=0.00ms | B_total=15.62KB | O_bw=0.0%
+[20:43:47.146] ℹ️ PQC SECURED: FUTABA_T14_001_D6 | L=25.52ms | L_crypto=8.58ms | B_total=15.81KB | O_bw=1.2%
+[20:43:47.160] ℹ️ PQC SECURED: FUTABA_T14_001_D6 | L=31.62ms | L_crypto=12.99ms | B_total=21.23KB | O_bw=35.8%
+[20:43:47.161] 🔄 UPDATE: FUTABA_T14_001_D6 → GBS | Trust: 0.63
+[20:43:47.163] ℹ️ PQC HANDSHAKE START: TURNIGY_001_D7
+[20:43:47.164] ℹ️ PQC SECURED: TURNIGY_001_D7 | L=16.88ms | L_crypto=0.00ms | B_total=15.62KB | O_bw=0.0%
+[20:43:47.178] ℹ️ PQC SECURED: TURNIGY_001_D7 | L=29.43ms | L_crypto=12.49ms | B_total=15.81KB | O_bw=1.2%
+[20:43:47.193] ℹ️ PQC SECURED: TURNIGY_001_D7 | L=31.55ms | L_crypto=12.92ms | B_total=21.23KB | O_bw=35.8%
+[20:43:47.195] 🔄 UPDATE: TURNIGY_001_D7 → GBS | Trust: 0.63
+[20:43:47.198] ℹ️ PQC HANDSHAKE START: Sybil_DJI_001_S9
+[20:43:47.199] ℹ️ PQC SECURED: Sybil_DJI_001_S9 | L=31.53ms | L_crypto=0.00ms | B_total=62.50KB | O_bw=0.0%
+[20:43:47.210] ℹ️ PQC SECURED: Sybil_DJI_001_S9 | L=41.40ms | L_crypto=9.81ms | B_total=62.68KB | O_bw=0.3%
+[20:43:47.227] ℹ️ PQC SECURED: Sybil_DJI_001_S9 | L=48.46ms | L_crypto=15.18ms | B_total=68.10KB | O_bw=9.0%
+[20:43:47.228] 🔄 UPDATE: Sybil_DJI_001_S9 → GBS | Trust: 0.63
+[20:43:47.232] ℹ️ PQC HANDSHAKE START: Sybil_DJI_001_S10
+[20:43:47.233] ℹ️ PQC SECURED: Sybil_DJI_001_S10 | L=31.53ms | L_crypto=0.00ms | B_total=62.50KB | O_bw=0.0%
+[20:43:47.243] ℹ️ PQC SECURED: Sybil_DJI_001_S10 | L=40.70ms | L_crypto=9.11ms | B_total=62.68KB | O_bw=0.3%
+[20:43:47.256] ℹ️ PQC SECURED: Sybil_DJI_001_S10 | L=45.55ms | L_crypto=12.26ms | B_total=68.10KB | O_bw=9.0%
+[20:43:47.256] 🔄 UPDATE: Sybil_DJI_001_S10 → GBS | Trust: 0.63
+[20:43:47.259] ℹ️ PQC HANDSHAKE START: Sybil_DJI_001_S11
+[20:43:47.260] ℹ️ PQC SECURED: Sybil_DJI_001_S11 | L=31.53ms | L_crypto=0.00ms | B_total=62.50KB | O_bw=0.0%
+[20:43:47.273] ℹ️ PQC SECURED: Sybil_DJI_001_S11 | L=43.05ms | L_crypto=11.46ms | B_total=62.68KB | O_bw=0.3%
+[20:43:47.295] ℹ️ PQC SECURED: Sybil_DJI_001_S11 | L=53.20ms | L_crypto=19.92ms | B_total=68.10KB | O_bw=9.0%
+[20:43:47.296] 🔄 UPDATE: Sybil_DJI_001_S11 → GBS | Trust: 0.63
+[20:43:47.297] 🔄 UPDATE: UNKNOWN_NOISE_U12 → GBS | Trust: 0.54
