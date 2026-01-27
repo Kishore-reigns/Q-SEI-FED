@@ -67,6 +67,24 @@ OVERLAP = 512
 SPEC_SIZE = 1024
 
 
+# =======================
+# PHASE-2 HYBRID PQC CONFIG
+# =======================
+PQC_KEY_SIZE_KB = 3.2      # Kyber public key
+PQC_SIG_SIZE_KB = 2.4      # Dilithium signature
+AES_IV_SIZE_KB = 0.016     # 16 bytes
+AES_TAG_SIZE_KB = 0.016   # 16 bytes
+NETWORK_RATE_MBPS = 25     # Simulated link speed
+BASE_NET_LATENCY_MS = 12  # Propagation + routing delay
+CRYPTO_MODES = ["NO_PQC", "HYBRID_PQC", "FULL_PQC"]
+
+
+# =======================
+# PHASE 3 ZERO TRUST CONFIG
+# ======================
+ENABLE_PHASE_3_ZERO_TRUST = False
+
+
 # Colors for visualization
 COLORS = {
     'trusted': '#00FF00',
@@ -308,6 +326,77 @@ def generate_spectrogram(iq):
     spec = (spec + 80) / 80
     return spec[:SPEC_SIZE, :SPEC_SIZE].astype(np.float32)
 
+# =======================
+# PHASE-2 HYBRID PQC MODULE
+# =======================
+
+class HybridPQCModule:
+    def __init__(self):
+        self.metrics = []
+        self.session_keys = {}
+
+    def encrypt_update(self, update_payload, mode="HYBRID_PQC"):
+        start = time.time()
+        drone_id = update_payload.get("drone_id", "UNK")
+
+        # Base FL payload size
+        B_FL = len(update_payload.get("weights", [])) * 8 / 1024  # KB
+        L_net = BASE_NET_LATENCY_MS
+
+        # ----------------------------
+        # MODE 1: NO PQC
+        # ----------------------------
+        if mode == "NO_PQC":
+            L_crypto = 0.0
+            B_PQC = 0.0
+            B_AES = 0.0
+
+        # ----------------------------
+        # MODE 2: HYBRID PQC
+        # ----------------------------
+        elif mode == "HYBRID_PQC":
+            pqc_time = random.uniform(8, 15)
+            aes_time = random.uniform(0.2, 0.6)
+            time.sleep((pqc_time + aes_time) / 1000)
+
+            L_crypto = pqc_time + aes_time
+            B_PQC = 0.15
+            B_AES = AES_IV_SIZE_KB + AES_TAG_SIZE_KB
+
+        # ----------------------------
+        # MODE 3: FULL PQC
+        # ----------------------------
+        elif mode == "FULL_PQC":
+            pqc_time = random.uniform(12, 20)
+            time.sleep(pqc_time / 1000)
+
+            L_crypto = pqc_time
+            B_PQC = PQC_KEY_SIZE_KB + PQC_SIG_SIZE_KB
+            B_AES = 0.0
+
+        # ----------------------------
+        # TRANSMISSION COST
+        # ----------------------------
+        B_total = B_FL + B_PQC + B_AES
+        R_kbps = NETWORK_RATE_MBPS * 1024
+        L_t = (B_total * 8) / R_kbps * 1000
+
+        # ----------------------------
+        # TOTAL LATENCY
+        # ----------------------------
+        L_total = L_net + L_crypto + L_t
+        O_bw = ((B_total - B_FL) / B_FL) * 100 if B_FL > 0 else 0
+
+        metric = {
+            "mode": mode,
+            "L_total": L_total,
+            "L_crypto": L_crypto,
+            "B_total": B_total,
+            "O_bw": O_bw
+        }
+
+        return update_payload, metric
+
 
 # =======================
 # BYZANTINE-RESISTANT TRUST MANAGEMENT
@@ -366,8 +455,15 @@ class ByzantineResistantTrustManager:
             return True, 1.0
         
         stored_fingerprint = self.sei_fingerprints[drone_id]['sei_params']
-        similarity = self.calculate_sei_similarity(stored_fingerprint, current_sei)
-        
+        # 🔧 Add controlled SEI noise (real RF drift)
+        noisy_sei = current_sei.copy()
+        noisy_sei["cfo_hz"] = noisy_sei.get("cfo_hz", 0.0) + random.uniform(-20, 20)
+        noisy_sei["iq_gain"] = noisy_sei.get("iq_gain", 1.0) * random.uniform(0.995, 1.005)
+        noisy_sei["phase_noise"] = noisy_sei.get("phase_noise", 5.0) * random.uniform(0.95, 1.05)
+
+        similarity = self.calculate_sei_similarity(stored_fingerprint, noisy_sei)
+
+                
         self.sei_fingerprints[drone_id]['verification_count'] += 1
         
         if similarity >= SEI_MATCH_THRESHOLD:
@@ -436,9 +532,9 @@ class ByzantineResistantTrustManager:
         
         # Base score from verification
         if verification_result:
-            base_score = 0.8 + 0.2 * sei_similarity
+            base_score = 0.3 + 0.2 * sei_similarity
         else:
-            base_score = 0.2 * sei_similarity
+            base_score = 0.3 * sei_similarity
         
         # Consensus factor
         consensus_factor = 1.0 if consensus_result else 0.3
@@ -703,8 +799,8 @@ class AdvancedDrone:
                 update = {
                     'drone_id': self.id,
                     'timestamp': time.time(),
-                    'weights': np.random.randn(100) * self.attack_strength * 25,
-                    'gradients': np.random.randn(100) * self.attack_strength * 15,
+                    'weights': np.random.randn(8000) * self.attack_strength * 25,
+                    'gradients': np.random.randn(8000) * self.attack_strength * 15,
                     'is_poisoned': True,
                     'attack_strength': self.attack_strength
                 }
@@ -712,8 +808,8 @@ class AdvancedDrone:
                 update = {
                     'drone_id': self.id,
                     'timestamp': time.time(),
-                    'weights': np.random.randn(100) * (1 + self.attack_strength * 0.1),
-                    'gradients': np.random.randn(100) * (1 + self.attack_strength * 0.05),
+                    'weights': np.random.randn(8000) * (1 + self.attack_strength * 0.1),
+                    'gradients': np.random.randn(8000) * (1 + self.attack_strength * 0.05),
                     'is_poisoned': True,
                     'attack_type': self.attack_type
                 }
@@ -721,7 +817,7 @@ class AdvancedDrone:
             update = {
                 'drone_id': self.id,
                 'timestamp': time.time(),
-                'weights': np.random.randn(100) * 0.1,
+                'weights': np.random.randn(2000) * 0.1,
                 'gradients': np.random.randn(100) * 0.05,
                 'is_poisoned': False
             }
@@ -740,6 +836,13 @@ class DefenseArchitecture:
         self.trust_manager = ByzantineResistantTrustManager()
         self.detection_history = defaultdict(list)
         self.attack_patterns = self.initialize_attack_patterns()
+        self.pqc = HybridPQCModule()
+        self.phase2_metrics = {
+            "NO_PQC": [],
+            "HYBRID_PQC": [],
+            "FULL_PQC": []
+        }
+
         
     def initialize_attack_patterns(self):
         """Initialize known attack patterns"""
@@ -876,21 +979,29 @@ class DefenseArchitecture:
         )
 
         # Byzantine consensus check (use last few updates)
-        recent_updates = drone.update_history[-5:] if hasattr(drone, "update_history") else []
-        consensus_ok, consensus_sim = self.trust_manager.byzantine_consensus_check(
-            drone.id,
-            update if update else {},
-            recent_updates
-        )
+        if ENABLE_PHASE_3_ZERO_TRUST:
+            recent_updates = list(drone.update_history)[-5:] if hasattr(drone, "update_history") else []
+            consensus_ok, consensus_sim = self.trust_manager.byzantine_consensus_check(
+                drone.id,
+                update if update else {},
+                recent_updates
+            )
+        else:
+            consensus_ok, consensus_sim = True, 1.0
+
 
         # 🔥 UPDATE TRUST SCORE (THIS WAS MISSING)
-        new_trust = self.trust_manager.update_trust_score(
-            drone.id,
-            verification_result=sei_verified,
-            sei_similarity=sei_similarity,
-            consensus_result=consensus_ok,
-            time_factor=1.0
-        )
+        
+            new_trust = self.trust_manager.update_trust_score(
+                drone.id,
+                verification_result=sei_verified,
+                sei_similarity=sei_similarity,
+                consensus_result=consensus_ok,
+                time_factor=1.0
+            )
+        
+           # new_trust = st.session_state.defense.trust_manager.trust_scores.get(drone.id, 0.7)
+
 
         security_report["trust_score"] = new_trust
 
@@ -928,7 +1039,7 @@ class DefenseArchitecture:
             security_report['recommendation'] = 'MONITOR'
         elif not sei_verified or len(security_report['detections']) > 0:
             security_report['recommendation'] = 'ISOLATE'
-        elif security_report['trust_score'] < MIN_TRUST_SCORE:
+        elif ENABLE_PHASE_3_ZERO_TRUST and security_report['trust_score'] < MIN_TRUST_SCORE:
             security_report['recommendation'] = 'MONITOR'
 
         
@@ -945,6 +1056,13 @@ def initialize_session_state():
         st.session_state.simulation_running = True
         st.session_state.last_update_time = time.time()
         st.session_state.update_count = 0
+
+        st.session_state.attack_counter = Counter()
+        st.session_state.total_detections = 0
+
+        st.session_state.security_reports = []
+
+
         
         # Load dataset
         st.session_state.dataset_samples = load_dataset_samples()
@@ -1138,25 +1256,78 @@ def update_simulation():
             if not drone.isolated and time.time() - drone.last_update_time > drone.update_interval:
                 # Generate update
                 update = drone.generate_model_update()
-                drone.last_update_time = time.time()
-                
+                # 🔐 PHASE-2 HYBRID PQC SECURE TRANSMISSION
+
                 # Security check
                 security_report = st.session_state.defense.comprehensive_security_check(drone, update)
+                sei_verified = security_report["verifications"][0]["passed"]
+                if sei_verified and drone.manufacturer != "UNKNOWN":
+                    add_log(f"PQC HANDSHAKE START: {drone.label}", "SECURITY")
+
+                    for mode in CRYPTO_MODES:
+                        secure_update, metric = st.session_state.defense.pqc.encrypt_update(update, mode=mode)
+                        if metric:
+                            st.session_state.defense.phase2_metrics[mode].append(metric)
+                        else:
+                            st.session_state.defense.phase2_metrics[mode].append({
+                                "L_total": BASE_NET_LATENCY_MS,
+                                "L_crypto": 0.0,
+                                "L_t": 0.0,
+                                "B_total": 0.0,
+                                "O_bw": 0.0,
+                                "blocked": True
+                            })
+
+                        st.session_state.defense.phase2_metrics[metric["mode"]].append(metric)
+                        drone.last_update_time = time.time()
+
+                        add_log(
+                            f"PQC SECURED: {drone.label} | "
+                            f"L={metric['L_total']:.2f}ms | "
+                            f"L_crypto={metric['L_crypto']:.2f}ms | "
+                            f"B_total={metric['B_total']:.2f}KB | "
+                            f"O_bw={metric['O_bw']:.1f}%",
+                            "SECURITY"
+                        )
+                elif drone.manufacturer == "UNKNOWN":
+                    st.session_state.defense.trust_manager.update_trust_score(
+                        drone.id,
+                        verification_result=False,
+                        sei_similarity=0.2,
+                        consensus_result=False,
+                        time_factor=1.0
+                    )
+
+                else:
+                    secure_update = None
+                    metric = None
+
+                    add_log(
+                        f"SEI BLOCKED: {drone.label} | Update NOT encrypted",
+                        "SECURITY"
+                    )
                 # Force trust update even when no attack detected
-                st.session_state.defense.trust_manager.update_trust_score(
-                    drone.id,
-                    verification_result=True,
-                    sei_similarity=1.0,
-                    consensus_result=True,
-                    time_factor=1.0
-                )
+                # st.session_state.defense.trust_manager.update_trust_score(
+                #     drone.id,
+                #     verification_result=True,
+                #     sei_similarity=1.0,
+                #     consensus_result=True,
+                #     time_factor=1.0
+                # )
 
                 st.session_state.security_reports.append(security_report)
+                
                 
                 # Log based on security check - FIXED: Use drone.label instead of drone.label
                 if security_report['recommendation'] == 'ISOLATE':
                     drone.isolated = True
                     detection_text = ""
+
+                        # ---- FORENSIC COUNTER UPDATE (FIX 2B) ----
+                    for det in security_report.get("detections", []):
+                        st.session_state.attack_counter[det["type"]] += 1
+                        st.session_state.total_detections += 1
+                    # -----------------------------------------
                     if security_report['detections']:
                         detection_text = str([d['type'] for d in security_report['detections']])
                     add_log(f"ATTACK DETECTED: {drone.label} - {detection_text}", "ATTACK")
@@ -1375,12 +1546,30 @@ def plot_sei_analysis(drone):
     plt.tight_layout()
     return fig
 
+def plot_pqc_comparison():
+    fig, ax = plt.subplots(figsize=(8, 4))
+
+    modes = CRYPTO_MODES
+    latencies = [
+        np.mean([m["L_total"] for m in st.session_state.defense.phase2_metrics[mode]])
+        for mode in modes
+    ]
+
+    ax.bar(modes, latencies)
+    ax.set_title("End-to-End Latency Comparison")
+    ax.set_ylabel("Latency (ms)")
+    ax.grid(True, alpha=0.3)
+
+    return fig
+
+
+
 def plot_attack_detection():
     """Plot attack detection statistics"""
     fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     
     # Get recent security reports
-    recent_reports = st.session_state.security_reports[-20:] if st.session_state.security_reports else []
+    recent_reports = st.session_state.security_reports if st.session_state.security_reports else []
     
     if recent_reports:
         # 1. Attack types detected
@@ -1390,7 +1579,15 @@ def plot_attack_detection():
                 attack_types.append(detection['type'])
         
         if attack_types:
-            attack_counts = Counter(attack_types)
+            attack_counts = st.session_state.attack_counter
+            if attack_counts:
+                axes[0].bar(
+                    attack_counts.keys(),
+                    attack_counts.values(),
+                    color=['red', 'orange', 'purple', 'brown']
+                )
+            else:
+                axes[0].text(0.5, 0.5, "No attacks detected", ha="center", va="center")
             axes[0].bar(attack_counts.keys(), attack_counts.values(), color=['red', 'orange', 'purple', 'brown'])
             axes[0].set_title('Attack Types Detected')
             axes[0].set_ylabel('Count')
@@ -1399,15 +1596,27 @@ def plot_attack_detection():
             axes[0].text(0.5, 0.5, 'No attacks detected', ha='center', va='center')
             axes[0].set_title('Attack Types Detected')
         
-        # 2. Trust score distribution
-        trust_scores = [r['trust_score'] for r in recent_reports]
-        axes[1].hist(trust_scores, bins=10, color='green', alpha=0.7)
+   
+       # 2. Trust score distribution (robust histogram)
+        trust_scores = [
+            r['trust_score'] for r in recent_reports
+            if isinstance(r.get("trust_score"), (int, float))
+            and 0 <= r["trust_score"] <= 1
+        ]
+
+        if len(trust_scores) >= 2 and len(set(trust_scores)) > 1:
+            bin_count = min(10, max(3, len(trust_scores) // 2))
+            axes[1].hist(trust_scores, bins=bin_count, color='green', alpha=0.7)
+        else:
+            axes[1].text(0.5, 0.5, "Not enough variance", ha='center', va='center')
+            axes[1].set_xlim(0, 1)
+
         axes[1].axvline(x=MIN_TRUST_SCORE, color='r', linestyle='--', label='Min Trust')
         axes[1].set_title('Trust Score Distribution')
         axes[1].set_xlabel('Trust Score')
         axes[1].set_ylabel('Frequency')
         axes[1].legend()
-        
+
         # 3. Detection confidence
         confidences = []
         for report in recent_reports:
@@ -1935,10 +2144,22 @@ def main():
                         
                         if report['recommendation'] == 'ISOLATE':
                             blocked += 1
+                            add_log(
+                                f"PQC UPDATE BLOCKED: {drone.label} | "
+                                f"Reason={report.get('detections', [])}",
+                                "ATTACK"
+                            )
+
                             add_log(f"UPDATE BLOCKED: {drone.label} - {report.get('detections', [])}", "ATTACK")
                         else:
                             updates_sent += 1
                             st.session_state.update_vectors.append(update)
+                            add_log(
+                                f"PQC UPDATE SENT: {drone.label} → GBS | "
+                                f"L={metric['L_total']:.2f}ms | "
+                                f"O_bw={metric['O_bw']:.1f}%",
+                                "UPDATE"
+                            )
                 
                 add_log(f"FEDERATED LEARNING: {updates_sent} updates sent, {blocked} blocked")
                 time.sleep(0.1)
@@ -2027,7 +2248,7 @@ def main():
         st.markdown("### 📈 Defense Metrics")
         
         total_updates = len(st.session_state.update_vectors)
-        recent_reports = st.session_state.security_reports[-10:] if st.session_state.security_reports else []
+        recent_reports = st.session_state.security_reports if st.session_state.security_reports else []
         
         if recent_reports:
             attacks_detected = sum(1 for r in recent_reports if r.get('detections'))
@@ -2050,6 +2271,32 @@ def main():
                 <p>Simulation metrics will appear here</p>
             </div>
             """, unsafe_allow_html=True)
+
+
+        # Phase-2 PQC metrics
+
+        st.markdown("### 🔐 PQC Mode Comparison")
+
+        metrics = st.session_state.defense.phase2_metrics
+
+        if all(len(metrics[m]) > 0 for m in CRYPTO_MODES):
+
+            def avg(m, k):
+                return np.mean([x[k] for x in metrics[m]])
+
+            col1, col2, col3 = st.columns(3)
+
+            for i, mode in enumerate(CRYPTO_MODES):
+                with [col1, col2, col3][i]:
+                    st.markdown(f"**{mode}**")
+                    st.metric("Avg Latency (ms)", f"{avg(mode, 'L_total'):.2f}")
+                    st.metric("Crypto Delay (ms)", f"{avg(mode, 'L_crypto'):.2f}")
+                    st.metric("Bandwidth (KB)", f"{avg(mode, 'B_total'):.2f}")
+                    st.metric("Overhead (%)", f"{avg(mode, 'O_bw'):.1f}")
+        else:
+            st.info("Waiting for metrics from all crypto modes...")
+
+
     
     # Detailed analysis for selected drone
     if st.session_state.selected_drone:
