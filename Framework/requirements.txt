@@ -3,3 +3,5 @@ torch
 matplotlib
 scipy
 tk
+streamlit
+pandas
