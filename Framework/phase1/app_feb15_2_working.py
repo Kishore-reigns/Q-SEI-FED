@@ -1062,15 +1062,37 @@ class DefenseArchitecture:
       
         # Determine recommendation (open-set aware)
         manufacturer = getattr(drone, "manufacturer", "UNKNOWN")
-        if not sei_verified and manufacturer == "UNKNOWN":
-            security_report['recommendation'] = 'MONITOR'
+        # UNKNOWN drones are treated as untrusted participants
+        if manufacturer == "UNKNOWN":
+            security_report['recommendation'] = 'ISOLATE'
+
         elif not sei_verified or len(security_report['detections']) > 0:
             security_report['recommendation'] = 'ISOLATE'
-        elif ENABLE_PHASE_3_ZERO_TRUST and security_report['trust_score'] < MIN_TRUST_SCORE:
-            security_report['recommendation'] = 'MONITOR'
 
         
         return security_report
+
+# =======================
+# FEDERATED LEARNING AGGREGATION
+# =======================
+def federated_aggregate():
+    updates = st.session_state.fl_buffer
+
+    if len(updates) < 2:
+        return
+
+    try:
+        stacked = np.stack(updates)
+        global_model = np.mean(stacked, axis=0)
+
+        st.session_state.global_model = global_model
+        st.session_state.fl_buffer = []
+
+        add_log("FL AGGREGATION COMPLETE — Global model updated", "FL")
+
+    except Exception as e:
+        add_log(f"FL ERROR: {str(e)}", "WARNING")
+        st.session_state.fl_buffer = []
 
 # =======================
 # SIMULATION MANAGEMENT
@@ -1105,6 +1127,13 @@ def initialize_session_state():
         # Initialize defense architecture
         if "defense" not in st.session_state:
             st.session_state.defense = DefenseArchitecture()
+
+        # Initialize FL buffer and global model (placeholders for future use)
+        if "fl_buffer" not in st.session_state:
+            st.session_state.fl_buffer = []
+
+        if "global_model" not in st.session_state:
+            st.session_state.global_model = np.zeros(10) # Placeholder for global model parameters
 
 
         # Backfill trust + manufacturer for existing drones (Streamlit-safe)
@@ -1283,98 +1312,166 @@ def update_simulation():
     # Handle model updates and attack detection
     if st.session_state.update_count % 5 == 0:
         for drone in st.session_state.drones:
-            if not drone.isolated and time.time() - drone.last_update_time > drone.update_interval:
-                # Generate update
-                update = drone.generate_model_update()
 
-                # LSNet embedding generation (SEI feature vector)
-                spec = drone.spectrogram_data[:128, :128]
-                spec = torch.tensor(spec).unsqueeze(0).repeat(1,2,1,1).float().to(DEVICE)
 
-                with torch.no_grad():
-                    embedding = st.session_state.lsnet(spec)
+            if drone.isolated:
+                continue
 
-                update["sei_embedding"] = embedding.cpu().numpy().tolist()
-                # 🔐 PHASE-2 HYBRID PQC SECURE TRANSMISSION
+            if time.time() - drone.last_update_time <= drone.update_interval:
+                continue
 
-                # Security check
-                security_report = st.session_state.defense.comprehensive_security_check(drone, update)
-                sei_verified = security_report["verifications"][0]["passed"]
-                if sei_verified and drone.manufacturer != "UNKNOWN":
-                    add_log(f"PQC HANDSHAKE START: {drone.label}", "SECURITY")
+            # -----------------------------
+            # STEP 1 — MODEL UPDATE
+            # -----------------------------
+            update = drone.generate_model_update()
 
-                    for mode in CRYPTO_MODES:
-                        secure_update, metric = st.session_state.defense.pqc.encrypt_update(update, mode=mode)
-                        if metric:
-                            st.session_state.defense.phase2_metrics[mode].append(metric)
+            # -----------------------------
+            # STEP 2 — LSNet SEI EMBEDDING
+            # -----------------------------
+            spec = drone.spectrogram_data[:128, :128]
+            spec = torch.tensor(spec).unsqueeze(0).repeat(1, 2, 1, 1).float().to(DEVICE)
+
+            with torch.no_grad():
+                embedding = st.session_state.lsnet(spec)
+
+            update["sei_embedding"] = embedding.cpu().numpy().tolist()
+
+            # -----------------------------
+            # STEP 3 — SECURITY CHECK (SEI)
+            # -----------------------------
+            security_report = st.session_state.defense.comprehensive_security_check(
+                drone, update
+            )
+
+            sei_verified = security_report["verifications"][0]["passed"]
+            secure_update = None
+            # -----------------------------
+            # STEP 4 — PQC SECURE TRANSMISSION
+            # -----------------------------
+            if sei_verified and drone.manufacturer != "UNKNOWN":
+
+                add_log(f"PQC HANDSHAKE START: {drone.label}", "SECURITY")
+
+                for mode in CRYPTO_MODES:
+                    secure_update, metric = st.session_state.defense.pqc.encrypt_update(update, mode=mode)
+                    
+
+                    if metric:
+                        st.session_state.defense.phase2_metrics[mode].append(metric)
+
+                        add_log(
+                            f"PQC SECURED [{mode}]: {drone.label} | "
+                            f"L={metric['L_total']:.2f}ms | "
+                            f"L_crypto={metric['L_crypto']:.2f}ms | "
+                            f"B_total={metric['B_total']:.2f}KB | "
+                            f"O_bw={metric['O_bw']:.1f}%",
+                            "SECURITY",
+                        )
+
+                        ##new change: update last_update_time here to reflect actual update time after security processing
+                        drone.last_update_time = time.time()
+                        # ---------- PHASE-3 FEDERATED LEARNING FILTER ----------
+                        trust = security_report["trust_score"]
+
+                        if sei_verified and trust > MIN_TRUST_SCORE and drone.manufacturer != "UNKNOWN":
+                            weights = update.get("weights", None)
+
+                            if weights is not None:
+                                weights = np.array(weights)
+
+                                if weights.shape[0] == 2000:
+                                    st.session_state.fl_buffer.append(weights)
+                                    add_log(f"FL UPDATE ACCEPTED: {drone.label}", "FL")
+                                else:
+                                    add_log(f"FL UPDATE REJECTED (MALFORMED): {drone.label}", "FL")
                         else:
-                            st.session_state.defense.phase2_metrics[mode].append({
+                            add_log(f"FL UPDATE REJECTED (UNTRUSTED): {drone.label}", "FL")
+                            drone.isolated = True
+                            add_log(f"DRONE ISOLATED: {drone.label} | Trust: {trust:.2f}", "SECURITY")
+
+                        ## -------
+                        # trust based FL filtering
+                        # trust = security_report["trust_score"]
+
+                        # if trust > MIN_TRUST_SCORE:
+                        #     weights = update.get("weights", None)
+                        #     if weights is not None:
+                        #         weights = np.array(weights)
+
+                        #         #only accept FL vectors of correct size (defense against malformed updates)
+                        #         if weights.shape[0] == 2000:
+                        #             st.session_state.fl_buffer.append(weights)
+                        #             add_log(f"FL UPDATE ACCEPTED: {drone.label}", "FL")
+                        #         else:
+                        #             add_log(f"FL UPDATE REJECTED (MALFORMED): {drone.label}", "FL")
+                            
+                        #     add_log(f"FL UPDATE ACCEPTED: {drone.label}", "FL")
+                        # else:
+                        #     add_log(f"FL UPDATE REJECTED (LOW TRUST): {drone.label}", "FL")
+
+                    else:
+                        st.session_state.defense.phase2_metrics[mode].append(
+                            {
                                 "L_total": BASE_NET_LATENCY_MS,
                                 "L_crypto": 0.0,
                                 "L_t": 0.0,
                                 "B_total": 0.0,
                                 "O_bw": 0.0,
-                                "blocked": True
-                            })
-
-                        #st.session_state.defense.phase2_metrics[metric["mode"]].append(metric)
-                        drone.last_update_time = time.time()
-
-                        add_log(
-                            f"PQC SECURED: {drone.label} | "
-                            f"L={metric['L_total']:.2f}ms | "
-                            f"L_crypto={metric['L_crypto']:.2f}ms | "
-                            f"B_total={metric['B_total']:.2f}KB | "
-                            f"O_bw={metric['O_bw']:.1f}%",
-                            "SECURITY"
+                                "blocked": True,
+                            }
                         )
-                elif drone.manufacturer == "UNKNOWN":
-                    st.session_state.defense.trust_manager.update_trust_score(
-                        drone.id,
-                        verification_result=False,
-                        sei_similarity=0.2,
-                        consensus_result=False,
-                        time_factor=1.0
-                    )
 
-                else:
-                    secure_update = None
-                    metric = None
+                drone.last_update_time = time.time()
 
-                    add_log(
-                        f"SEI BLOCKED: {drone.label} | Update NOT encrypted",
-                        "SECURITY"
-                    )
-                # Force trust update even when no attack detected
-                # st.session_state.defense.trust_manager.update_trust_score(
-                #     drone.id,
-                #     verification_result=True,
-                #     sei_similarity=1.0,
-                #     consensus_result=True,
-                #     time_factor=1.0
-                # )
+            elif drone.manufacturer == "UNKNOWN":
+                # Unknown drone should never become trusted
+                st.session_state.defense.trust_manager.trust_scores[drone.id] = 0.25
 
-                st.session_state.security_reports.append(security_report)
-                
-                
-                # Log based on security check - FIXED: Use drone.label instead of drone.label
-                if security_report['recommendation'] == 'ISOLATE':
-                    drone.isolated = True
-                    detection_text = ""
+            else:
+                add_log(
+                    f"SEI BLOCKED: {drone.label} | Update NOT encrypted",
+                    "SECURITY",
+                )
 
-                        # ---- FORENSIC COUNTER UPDATE (FIX 2B) ----
-                    for det in security_report.get("detections", []):
-                        st.session_state.attack_counter[det["type"]] += 1
-                        st.session_state.total_detections += 1
-                    # -----------------------------------------
-                    if security_report['detections']:
-                        detection_text = str([d['type'] for d in security_report['detections']])
-                    add_log(f"ATTACK DETECTED: {drone.label} - {detection_text}", "ATTACK")
-                elif any(d['type'] == 'MODEL_POISONING' for d in security_report.get('detections', [])):
-                    add_log(f"POISONING DETECTED: {drone.label} - Update rejected", "ATTACK")
-                else:
-                    add_log(f"UPDATE: {drone.label} → GBS | Trust: {security_report['trust_score']:.2f}")
+            # -----------------------------
+            # STEP 5 — STORE SECURITY REPORT
+            # -----------------------------
+            st.session_state.security_reports.append(security_report)
 
+            # -----------------------------
+            # STEP 6 — ATTACK HANDLING
+            # -----------------------------
+            if security_report["recommendation"] == "ISOLATE":
+                drone.isolated = True
+
+                for det in security_report.get("detections", []):
+                    st.session_state.attack_counter[det["type"]] += 1
+                    st.session_state.total_detections += 1
+
+                detection_text = ""
+                if security_report["detections"]:
+                    detection_text = str([d["type"] for d in security_report["detections"]])
+
+                add_log(f"ATTACK DETECTED: {drone.label} - {detection_text}", "ATTACK")
+
+            elif any(
+                d["type"] == "MODEL_POISONING"
+                for d in security_report.get("detections", [])
+            ):
+                add_log(
+                    f"POISONING DETECTED: {drone.label} - Update rejected",
+                    "ATTACK",
+                )
+
+            else:
+                add_log(
+                    f"UPDATE: {drone.label} → GBS | Trust: {security_report['trust_score']:.2f}"
+                )
+        # =====================================
+        # PHASE-3 FEDERATED AGGREGATION TRIGGER
+        # =====================================
+        if len(st.session_state.fl_buffer) >= 3:
+            federated_aggregate()
 # =======================
 # VISUALIZATION FUNCTIONS
 # =======================
