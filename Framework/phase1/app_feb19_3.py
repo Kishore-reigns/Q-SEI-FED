@@ -1167,7 +1167,11 @@ class DefenseArchitecture:
                             'confidence': score,
                             'reasons': reasons
                         })
-                
+
+                        for det in security_report['detections']:
+                            st.session_state.attack_counter[det['type']] += 1
+                            st.session_state.total_detections += 1
+                                        
                 if drone.attack_type == 'SYBIL':
                     detected, score, reasons = self.detect_sybil_attack(st.session_state.drones)
                     if detected:
@@ -1176,6 +1180,10 @@ class DefenseArchitecture:
                             'confidence': score,
                             'reasons': reasons
                         })
+
+                        for det in security_report['detections']:
+                            st.session_state.attack_counter[det['type']] += 1
+                            st.session_state.total_detections += 1
             
         
             # Determine recommendation (open-set aware)
@@ -1240,7 +1248,6 @@ def initialize_session_state():
 
         st.session_state.security_reports = []
 
-
         
         # Load dataset
         st.session_state.dataset_samples = load_dataset_samples()
@@ -1260,6 +1267,12 @@ def initialize_session_state():
 
         if "global_model" not in st.session_state:
             st.session_state.global_model = np.zeros(10) # Placeholder for global model parameters
+
+        if "fl_round" not in st.session_state:
+            st.session_state.fl_round = 0
+        
+        st.session_state.fl_buffer
+        st.session_state.global_model 
 
 
         # Backfill trust + manufacturer for existing drones (Streamlit-safe)
@@ -1389,7 +1402,12 @@ def add_log(message, level="INFO"):
 ##========================
 
 def run_fl_round():
-    add_log("FL ROUND STARTED", "FL")
+
+    if "fl_round" not in st.session_state:
+        st.session_state["fl_round"] = 0
+    st.session_state["fl_round"] += 1
+    add_log(f"[FL] Starting Round {st.session_state.fl_round}", "FL")
+    #add_log("FL ROUND STARTED", "FL")
 
     accepted_updates = []
     accepted_ids = []  
@@ -1446,10 +1464,11 @@ def run_fl_round():
                 drone.isolated = True
                 add_log(f"DRONE ISOLATED BY FL: {drone.label}", "FL")
 
-    accepted_updates = []
-    accepted_ids = []
-    if accepted_updates:
+    # After loop finishes
+    if len(accepted_updates) >= 2:
         global_model_update(accepted_updates, accepted_ids, beta=0.5)
+    else:
+        add_log("[FL] Not enough trusted updates for aggregation", "WARNING")
 
 
 def global_model_update(updates, drone_ids, beta=0.5):
@@ -2010,13 +2029,12 @@ def plot_attack_detection():
             attack_counts = st.session_state.attack_counter
             if attack_counts:
                 axes[0].bar(
-                    attack_counts.keys(),
-                    attack_counts.values(),
-                    color=['red', 'orange', 'purple', 'brown']
+                    list(attack_counts.keys()),
+                    list(attack_counts.values())
                 )
             else:
                 axes[0].text(0.5, 0.5, "No attacks detected", ha="center", va="center")
-            axes[0].bar(attack_counts.keys(), attack_counts.values(), color=['red', 'orange', 'purple', 'brown'])
+            #axes[0].bar(attack_counts.keys(), attack_counts.values(), color=['red', 'orange', 'purple', 'brown'])
             axes[0].set_title('Attack Types Detected')
             axes[0].set_ylabel('Count')
             axes[0].tick_params(axis='x', rotation=45)
@@ -2075,19 +2093,17 @@ def plot_dynamic_threshold():
         return None
 
     data = st.session_state.delta_history
-    rounds = [d["round"] for d in data]
+    rounds = [i+1 for i in range(len(data))]
     deltas = [d["delta_t"] for d in data]
-    mus = [d["mu_t"] for d in data]
 
     fig, ax = plt.subplots(figsize=(8,4))
 
-    ax.plot(rounds, deltas, label="Adaptive Threshold δ_t")
-    ax.plot(rounds, mus, linestyle="--", label="Mean Similarity μ_t")
+    ax.plot(rounds, deltas, marker="o")
 
-    ax.set_title("Dynamic FL Threshold vs Epoch")
-    ax.set_xlabel("Epoch")
-    ax.set_ylabel("Similarity")
-    ax.legend()
+    ax.set_title("Adaptive Threshold per FL Round")
+    ax.set_xlabel("FL Round")
+    ax.set_ylabel("Adaptive Threshold (δₜ)")
+
     ax.grid(True, alpha=0.3)
 
     return fig
@@ -2584,40 +2600,6 @@ def main():
                 st.rerun()
         
         with defense_col2:
-            if st.button("🔄 Send Updates", key="send_updates",
-                        use_container_width=True, type="primary"):
-                updates_sent = 0
-                blocked = 0
-                
-                for drone in st.session_state.drones:
-                    if not drone.isolated:
-                        update = drone.generate_model_update()
-                        report = st.session_state.defense.comprehensive_security_check(drone, update)
-                        
-                        if report['recommendation'] == 'ISOLATE':
-                            blocked += 1
-                            add_log(
-                                f"PQC UPDATE BLOCKED: {drone.label} | "
-                                f"Reason={report.get('detections', [])}",
-                                "ATTACK"
-                            )
-
-                            add_log(f"UPDATE BLOCKED: {drone.label} - {report.get('detections', [])}", "ATTACK")
-                        else:
-                            updates_sent += 1
-                            st.session_state.update_vectors.append(update)
-                            add_log(
-                                f"PQC UPDATE SENT: {drone.label} → GBS | "
-                                f"L={metric['L_total']:.2f}ms | "
-                                f"O_bw={metric['O_bw']:.1f}%",
-                                "UPDATE"
-                            )
-                
-                add_log(f"FEDERATED LEARNING: {updates_sent} updates sent, {blocked} blocked")
-                time.sleep(0.1)
-                st.rerun()
-        
-        with defense_col3:
             if st.button("🧹 Clear Logs", key="clear_logs",
                         use_container_width=True):
                 st.session_state.logs.clear()
@@ -2626,8 +2608,8 @@ def main():
                 st.rerun()
         
         #morning
-        with defense_col4:
-            if st.button("Next FL Round"):
+        with defense_col3:
+            if st.button(" ⏭️ Next FL Round",use_container_width=True):
                 run_fl_round()
         
         # Security dashboard
@@ -2635,6 +2617,15 @@ def main():
         attack_fig = plot_attack_detection()
         st.pyplot(attack_fig, use_container_width=True)
         plt.close(attack_fig)
+
+        st.markdown("### 📈 Dynamic Threshold Evolution")
+
+        threshold_fig = plot_dynamic_threshold()
+        if threshold_fig:
+            st.pyplot(threshold_fig, use_container_width=True)
+            plt.close(threshold_fig)
+        else:
+            st.info("Waiting for FL rounds...")
     
     with col_right:
         # Drone list
