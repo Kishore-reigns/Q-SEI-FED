@@ -798,8 +798,8 @@ class AdvancedDrone:
         self.handle_boundaries()
         
         # Update trust score decay
-        if not self.is_malicious:
-            self.trust_score *= TRUST_DECAY_RATE
+        # if not self.is_malicious:
+        #     self.trust_score *= TRUST_DECAY_RATE
     
     def find_trusted_drones(self):
         """Find positions of trusted drones (for malicious drones)"""
@@ -1133,17 +1133,15 @@ class DefenseArchitecture:
                 )
             else:
                 consensus_ok, consensus_sim = True, 1.0
-
-
             # 🔥 UPDATE TRUST SCORE (THIS WAS MISSING)
-            
-                new_trust = self.trust_manager.update_trust_score(
-                    drone.id,
-                    verification_result=sei_verified,
-                    sei_similarity=sei_similarity,
-                    consensus_result=consensus_ok,
-                    time_factor=1.0
-                )
+        
+            new_trust = self.trust_manager.update_trust_score(
+                drone.id,
+                verification_result=sei_verified,
+                sei_similarity=sei_similarity,
+                consensus_result=consensus_ok,
+                time_factor=1.0
+            )
             
             # new_trust = st.session_state.defense.trust_manager.trust_scores.get(drone.id, 0.7)
 

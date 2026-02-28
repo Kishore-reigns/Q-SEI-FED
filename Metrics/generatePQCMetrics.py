@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 
+from generateMetrics import OUTPUT_DIR
+
 uavs = [2,3,4,5,6,7,8,9,10]
 
 # ===============================
@@ -39,6 +41,7 @@ plt.ylabel("Average Latency (ms)")
 plt.title("Average Latency vs UAV Count")
 plt.legend()
 plt.grid(True)
+plt.savefig(f"{OUTPUT_DIR}/avg_latency.png", dpi=300)
 plt.show()
 
 
@@ -54,6 +57,7 @@ plt.ylabel("Crypto Delay (ms)")
 plt.title("Crypto Delay vs UAV Count")
 plt.legend()
 plt.grid(True)
+plt.savefig(f"{OUTPUT_DIR}/crypto_delay.png", dpi=300)
 plt.show()
 
 
@@ -69,6 +73,7 @@ plt.ylabel("Bandwidth (KB)")
 plt.title("Bandwidth vs UAV Count")
 plt.legend()
 plt.grid(True)
+plt.savefig(f"{OUTPUT_DIR}/bandwidth.png", dpi=300)
 plt.show()
 
 
@@ -84,4 +89,5 @@ plt.ylabel("Overhead (%)")
 plt.title("Overhead vs UAV Count")
 plt.legend()
 plt.grid(True)
+plt.savefig(f"{OUTPUT_DIR}/overhead.png", dpi=300)
 plt.show()

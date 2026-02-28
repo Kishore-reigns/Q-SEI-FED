@@ -8,6 +8,7 @@
 """
 
 import matplotlib.pyplot as plt
+OUTPUT_DIR = "plots"
 
 rounds = [0,1, 2, 3, 4, 5, 6]
 
@@ -32,5 +33,6 @@ plt.ylabel("Adaptive Threshold Drift (δₜ)")
 plt.title("Threshold Drift Across FL Rounds\n(Trusted vs Malicious Distribution)")
 plt.legend()
 plt.grid(True)
+plt.savefig(f"{OUTPUT_DIR}/threshold_drift.png", dpi=300)
 
 plt.show()
